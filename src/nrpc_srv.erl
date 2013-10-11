@@ -97,7 +97,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 do_handle_call_tasks( ReplyToNRPC, Tasks, State0 = #s{ w_sup = WSup } ) ->
 	{ok, Transmitter, State1} = transmitter_get( ReplyToNRPC, State0 ),
-	spawn( fun() ->
+	spawn_link( fun() ->
 		do_handle_call_tasks_loop( Tasks, Transmitter, WSup )
 	end),
 	{noreply, State1}.
