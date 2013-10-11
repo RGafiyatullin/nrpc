@@ -18,7 +18,7 @@
 -module (nrpc_transmitter).
 -export ([
 		start_link/3,
-		push_call/5,
+		push_call/6,
 		push_reply/3
 	]).
 -export([
@@ -28,7 +28,7 @@
 -include("nrpc.hrl").
 
 start_link( Config, Local, Remote ) -> proc_lib:start_link( ?MODULE, init_it, [ Config, Local, Remote ] ).
-push_call( Transmitter, GenReplyTo, Module, Function, Args ) -> Transmitter ! {push_call, GenReplyTo, Module, Function, Args}, ok.
+push_call( Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) -> Transmitter ! {push_call, GroupLeader, GenReplyTo, Module, Function, Args}, ok.
 push_reply( Transmitter, GenReplyTo, Result ) -> Transmitter ! {push_reply, GenReplyTo, Result}, ok.
 
 -record(s, {
@@ -52,9 +52,9 @@ init_it( Config, Local, Remote ) ->
 
 idle_loop( S = #s{ window_size = WS } ) ->
 	receive
-		{push_call, GenReplyTo, Module, Function, Args} ->
+		{push_call, GroupLeader, GenReplyTo, Module, Function, Args} ->
 			Deadline = now_ms() + WS,
-			aggregating_loop( Deadline, S #s{ pending_tasks = [ {call, GenReplyTo, Module, Function, Args } ] } );
+			aggregating_loop( Deadline, S #s{ pending_tasks = [ {call, GroupLeader, GenReplyTo, Module, Function, Args } ] } );
 		{push_reply, GenReplyTo, Result} ->
 			Deadline = now_ms() + WS,
 			aggregating_loop( Deadline, S #s{ pending_tasks = [ {reply, GenReplyTo, Result} ] } );
@@ -66,9 +66,9 @@ idle_loop( S = #s{ window_size = WS } ) ->
 aggregating_loop( Deadline, S = #s{ pending_tasks = PendingTasks } ) ->
 	MSecTillDeadline = max( Deadline - now_ms(), 0 ),
 	receive
-		{push_call, GenReplyTo, Module, Function, Args} ->
+		{push_call, GroupLeader, GenReplyTo, Module, Function, Args} ->
 			aggregating_loop( Deadline,
-				S #s{ pending_tasks = [ {call, GenReplyTo, Module, Function, Args} | PendingTasks ] } );
+				S #s{ pending_tasks = [ {call, GroupLeader, GenReplyTo, Module, Function, Args} | PendingTasks ] } );
 		{push_reply, GenReplyTo, Result} ->
 			aggregating_loop( Deadline,
 				S #s{ pending_tasks = [ {reply, GenReplyTo, Result} | PendingTasks ] } );
@@ -80,8 +80,17 @@ aggregating_loop( Deadline, S = #s{ pending_tasks = PendingTasks } ) ->
 	end.
 
 flush_tasks( S = #s{ remote = Remote, local = Local, pending_tasks = PendingTasks } ) ->
-	error_logger:info_report([ ?MODULE, flush_tasks, {local, Local}, {remote, Remote}, {tasks_count, length(PendingTasks)} ]),
-	ok = nrpc_srv:tasks( Remote, Local, PendingTasks ),
+	% error_logger:info_report([ ?MODULE, flush_tasks, {local, Local}, {remote, Remote}, {tasks_count, length(PendingTasks)} ]),
+	case nrpc_srv:tasks( Remote, Local, PendingTasks ) of
+		ok -> ok;
+		{Error, Reason} ->
+			error_logger:warning_report( [ ?MODULE, flush_tasks, {Error, Reason} ] ),
+			lists:foreach( fun
+					({reply, _, _}) -> ok;
+					({call, _, GenReplyTo, _, _, _}) -> _Ignored = gen_server:reply( GenReplyTo, {Error, Reason} ), ok
+				end,
+				PendingTasks )
+	end,
 	idle_loop( S #s{ pending_tasks = [] } ).
 
 

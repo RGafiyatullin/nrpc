@@ -8,10 +8,10 @@
   {env, [
   		{aggregators, [
   			{ one, [
-  					{window_size, 10}
+  					{window_size, 0}
   				] },
   			{ two, [
-  					{window_size, 10}
+  					{window_size, 0}
   				] }
   		]}
   	]}

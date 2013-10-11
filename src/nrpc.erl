@@ -17,7 +17,7 @@
 
 -module (nrpc).
 -export([ start/0, stop/0 ]).
--export([ call/5 ]).
+-export([ call/5, call_explicit/5 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -33,6 +33,24 @@
 
 start() -> application:start(nrpc).
 stop() -> application:stop(nrpc).
-call( ClientAggr, ServerAggr, Module, Function, Args ) ->
-	gen_server:call( ClientAggr, {call, ServerAggr, Module, Function, Args}, infinity ).
+
+call_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
+	case gen_server:call( ClientAggr, {call, erlang:group_leader(), ServerAggr, Module, Function, Args}, infinity ) of
+		{ok, Result} -> Result;
+		{Error, Reason}
+			when Error == exit
+			orelse Error == error
+			orelse Error == throw
+		->
+			erlang:Error(Reason)
+	end.
+
+call( RemoteNode, NRPCName, Module, Function, Args )
+	when is_atom( RemoteNode )
+	andalso is_atom( NRPCName )
+	andalso is_atom( Module )
+	andalso is_atom( Function )
+	andalso is_list( Args )
+->
+	call_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
 

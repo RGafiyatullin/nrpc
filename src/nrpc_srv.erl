@@ -33,7 +33,13 @@
 
 -spec tasks( NRPC :: nrpc_aggregator_name(), ReplyToNRPC :: nrpc_aggregator_name(), Tasks :: [ nrpc_call() | nrpc_reply() ] ) -> ok.
 tasks( NRPC, ReplyToNRPC, Tasks ) ->
-	gen_server:cast( NRPC, {tasks, ReplyToNRPC, Tasks} ).
+	% error_logger:info_report( [?MODULE, tasks, {nrpc, NRPC}, {reply_to_nrpc, ReplyToNRPC}, {tasks, Tasks}] ),
+	try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks} )
+	catch
+		Error:Reason ->
+			error_logger:warning_report([?MODULE, tasks, {Error, Reason}]),
+			{Error, Reason}
+	end.
 
 
 -spec start_link( Name :: nrpc_aggregator_name(), Config :: nrpc_aggregator_config() ) -> {ok, pid()}.
@@ -48,7 +54,8 @@ start_link_sup( Name, Config ) -> supervisor:start_link( ?MODULE, { supervisor, 
 -record(s, {
 		name :: nrpc_aggregator_name(),
 		config :: nrpc_aggregator_config(),
-		sup :: pid()
+		sup :: pid(),
+		w_sup :: pid()
 	}).
 
 init({supervisor, Name, Config}) -> supervisor_init( Name, Config );
@@ -64,14 +71,18 @@ supervisor_init( Name, Config ) ->
 -spec gen_server_init( nrpc_aggregator_name(), nrpc_aggregator_config() ) -> {ok, #s{}}.
 gen_server_init( Name, Config ) -> 
 	{ok, Sup} = start_link_sup( Name, Config ),
+	{ok, WSup} = nrpc_worker:start_link_sup(),
 	{ok, #s{
 			name = Name,
 			config = Config,
-			sup = Sup
+			sup = Sup,
+			w_sup = WSup
 		}}.
-handle_call({call, RemoteAggr, Module, Function, Args}, From, State) -> do_handle_call_call( RemoteAggr, From, Module, Function, Args, State );
+handle_call({call, GroupLeader, RemoteAggr, Module, Function, Args}, From, State) -> do_handle_call_call( RemoteAggr, GroupLeader, From, Module, Function, Args, State );
+handle_call({tasks, ReplyToNRPC, Tasks}, _From, State0) ->
+	{noreply, State1} = do_handle_call_tasks( ReplyToNRPC, Tasks, State0 ),
+	{reply, ok, State1};
 handle_call(Request, _From, State = #s{}) -> {stop, {bad_arg, Request}, State}.
-handle_cast({tasks, ReplyToNRPC, Tasks}, State = #s{}) -> do_handle_cast_tasks( ReplyToNRPC, Tasks, State );
 handle_cast(Request, State = #s{}) -> {stop, {bad_arg, Request}, State}.
 handle_info( {'DOWN', _MonRef, process, Pid, _}, State ) -> do_handle_info_down( Pid, State );
 handle_info(Message, State = #s{}) -> {stop, {bad_arg, Message}, State}.
@@ -84,25 +95,22 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 -define( transmitter_key( Remote ), {transmitter, Remote} ).
 -define( transmitter_key_r( Pid ), {transmitter_r, Pid} ).
 
-do_handle_cast_tasks( ReplyToNRPC, Tasks, State0 = #s{} ) ->
+do_handle_call_tasks( ReplyToNRPC, Tasks, State0 = #s{ w_sup = WSup } ) ->
 	{ok, Transmitter, State1} = transmitter_get( ReplyToNRPC, State0 ),
 	spawn( fun() ->
-		do_handle_cast_tasks_loop( Tasks, Transmitter )
+		do_handle_call_tasks_loop( Tasks, Transmitter, WSup )
 	end),
 	{noreply, State1}.
 
-do_handle_cast_tasks_loop( [], _Transmitter ) -> ok;
-do_handle_cast_tasks_loop( [ {call, GenReplyTo, Module, Function, Args} | Tasks ], Transmitter ) ->
-	spawn( fun() ->
-			Result =
-				try {ok, erlang:apply( Module, Function, Args )}
-				catch Error:Reason -> {Error, Reason} end,
-			ok = nrpc_transmitter:push_reply( Transmitter, GenReplyTo, Result )
-		end ),
-	do_handle_cast_tasks_loop( Tasks, Transmitter );
-do_handle_cast_tasks_loop( [ {reply, GenReplyTo, Result} | Tasks ], Transmitter ) ->
+do_handle_call_tasks_loop( [], _Transmitter, _WSup ) -> ok;
+do_handle_call_tasks_loop( [ {call, GroupLeader, GenReplyTo, Module, Function, Args} | Tasks ], Transmitter, WSup ) ->
+	nrpc_worker:start_worker(
+		WSup, Transmitter, GroupLeader,
+		GenReplyTo, Module, Function, Args ),
+	do_handle_call_tasks_loop( Tasks, Transmitter, WSup );
+do_handle_call_tasks_loop( [ {reply, GenReplyTo, Result} | Tasks ], Transmitter, WSup ) ->
 	_Ignored = gen_server:reply( GenReplyTo, Result ),
-	do_handle_cast_tasks_loop( Tasks, Transmitter ).
+	do_handle_call_tasks_loop( Tasks, Transmitter, WSup ).
 
 do_handle_info_down( Pid, State = #s{ sup = Sup } ) ->
 	case erlang:get( ?transmitter_key_r( Pid ) ) of
@@ -114,9 +122,9 @@ do_handle_info_down( Pid, State = #s{ sup = Sup } ) ->
 			{noreply, State}
 	end.
 
-do_handle_call_call( Remote, From, Module, Function, Args, State0 ) ->
+do_handle_call_call( Remote, GroupLeader, From, Module, Function, Args, State0 ) ->
 	{ok, Transmitter, State1} = transmitter_get( Remote, State0 ),
-	ok = nrpc_transmitter:push_call( Transmitter, From, Module, Function, Args ),
+	ok = nrpc_transmitter:push_call( Transmitter, GroupLeader, From, Module, Function, Args ),
 	{noreply, State1}.
 
 -spec transmitter_get( term(), #s{} ) -> {ok, pid(), #s{}}.
