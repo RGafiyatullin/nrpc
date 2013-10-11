@@ -7,10 +7,7 @@
   {mod, {nrpc_app, []} },
   {env, [
   		{aggregators, [
-  			{ one, [
-  					{window_size, 10}
-  				] },
-  			{ two, [
+  			{ nrpc_default, [
   					{window_size, 10}
   				] }
   		]}

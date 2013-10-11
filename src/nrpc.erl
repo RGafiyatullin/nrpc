@@ -17,7 +17,7 @@
 
 -module (nrpc).
 -export([ start/0, stop/0 ]).
--export([ call/5, call_explicit/5 ]).
+-export([ call/4, call/5, call_explicit/5 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -54,4 +54,6 @@ call( RemoteNode, NRPCName, Module, Function, Args )
 	andalso is_list( Args )
 ->
 	call_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
+
+call( Node, Module, Function, Args ) -> call( Node, nrpc_default, Module, Function, Args ).
 
