@@ -45,6 +45,7 @@ call_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
 			erlang:Error(Reason)
 	end.
 
+call( ThisNode, _, Module, Function, Args ) when ThisNode == node() -> erlang:apply( Module, Function, Args );
 call( RemoteNode, NRPCName, Module, Function, Args )
 	when is_atom( RemoteNode )
 	andalso is_atom( NRPCName )
