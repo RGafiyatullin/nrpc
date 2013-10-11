@@ -1,0 +1,18 @@
+{application, nrpc,
+ [
+  {description, ""},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, []},
+  {mod, {nrpc_app, []} },
+  {env, [
+  		{aggregators, [
+  			{ one, [
+  					{window_size, 10}
+  				] },
+  			{ two, [
+  					{window_size, 10}
+  				] }
+  		]}
+  	]}
+ ]}.
