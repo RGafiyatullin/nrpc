@@ -31,7 +31,7 @@
 ]).
 -include("nrpc.hrl").
 
--spec tasks( NRPC :: nrpc_aggregator_name(), ReplyToNRPC :: nrpc_aggregator_name(), Tasks :: [ nrpc_call() | nrpc_reply() ] ) -> ok.
+-spec tasks( NRPC :: nrpc_aggregator_name(), ReplyToNRPC :: nrpc_aggregator_name(), Tasks :: [ nrpc_call() | nrpc_cast() | nrpc_reply() ] ) -> ok.
 tasks( NRPC, ReplyToNRPC, Tasks ) ->
 	% error_logger:info_report( [?MODULE, tasks, {nrpc, NRPC}, {reply_to_nrpc, ReplyToNRPC}, {tasks, Tasks}] ),
 	try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks} )
@@ -83,6 +83,7 @@ handle_call({tasks, ReplyToNRPC, Tasks}, _From, State0) ->
 	{noreply, State1} = do_handle_call_tasks( ReplyToNRPC, Tasks, State0 ),
 	{reply, ok, State1};
 handle_call(Request, _From, State = #s{}) -> {stop, {bad_arg, Request}, State}.
+handle_cast({cast, RemoteAggr, Module, Function, Args}, State) -> do_handle_cast_cast( RemoteAggr, Module, Function, Args, State );
 handle_cast(Request, State = #s{}) -> {stop, {bad_arg, Request}, State}.
 handle_info( {'DOWN', _MonRef, process, Pid, _}, State ) -> do_handle_info_down( Pid, State );
 handle_info(Message, State = #s{}) -> {stop, {bad_arg, Message}, State}.
@@ -95,6 +96,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 -define( transmitter_key( Remote ), {transmitter, Remote} ).
 -define( transmitter_key_r( Pid ), {transmitter_r, Pid} ).
 
+% handle a batch of tasks
 do_handle_call_tasks( ReplyToNRPC, Tasks, State0 = #s{ w_sup = WSup } ) ->
 	{ok, Transmitter, State1} = transmitter_get( ReplyToNRPC, State0 ),
 	spawn_link( fun() ->
@@ -108,10 +110,14 @@ do_handle_call_tasks_loop( [ {call, GroupLeader, GenReplyTo, Module, Function, A
 		WSup, Transmitter, GroupLeader,
 		GenReplyTo, Module, Function, Args ),
 	do_handle_call_tasks_loop( Tasks, Transmitter, WSup );
+do_handle_call_tasks_loop( [ {cast, Module, Function, Args} | Tasks ], Transmitter, WSup ) ->
+	nrpc_worker:start_worker( WSup, Module, Function, Args ),
+	do_handle_call_tasks_loop( Tasks, Transmitter, WSup );
 do_handle_call_tasks_loop( [ {reply, GenReplyTo, Result} | Tasks ], Transmitter, WSup ) ->
 	_Ignored = gen_server:reply( GenReplyTo, Result ),
 	do_handle_call_tasks_loop( Tasks, Transmitter, WSup ).
 
+%% handle DOWN-messages (in case a transmitter dies)
 do_handle_info_down( Pid, State = #s{ sup = Sup } ) ->
 	case erlang:get( ?transmitter_key_r( Pid ) ) of
 		undefined -> {noreply, State};
@@ -121,6 +127,12 @@ do_handle_info_down( Pid, State = #s{ sup = Sup } ) ->
 			_ = transmitter_start( Sup, Remote ),
 			{noreply, State}
 	end.
+
+do_handle_cast_cast( Remote, Module, Function, Args, State0 ) ->
+	{ok, Transmitter, State1} = transmitter_get( Remote, State0 ),
+	ok = nrpc_transmitter:push_cast( Transmitter, Module, Function, Args ),
+	{noreply, State1}.
+
 
 do_handle_call_call( Remote, GroupLeader, From, Module, Function, Args, State0 ) ->
 	{ok, Transmitter, State1} = transmitter_get( Remote, State0 ),

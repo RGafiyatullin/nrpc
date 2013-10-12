@@ -19,6 +19,7 @@
 -export ([
 		start_link/3,
 		push_call/6,
+		push_cast/4,
 		push_reply/3
 	]).
 -export([
@@ -29,6 +30,7 @@
 
 start_link( Config, Local, Remote ) -> proc_lib:start_link( ?MODULE, init_it, [ Config, Local, Remote ] ).
 push_call( Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) -> Transmitter ! {push_call, GroupLeader, GenReplyTo, Module, Function, Args}, ok.
+push_cast( Transmitter, Module, Function, Args ) -> Transmitter ! {push_cast, Module, Function, Args}, ok.
 push_reply( Transmitter, GenReplyTo, Result ) -> Transmitter ! {push_reply, GenReplyTo, Result}, ok.
 
 -record(s, {
@@ -37,7 +39,7 @@ push_reply( Transmitter, GenReplyTo, Result ) -> Transmitter ! {push_reply, GenR
 		config :: nrpc_aggregator_config(),
 		window_size :: pos_integer(),
 
-		pending_tasks = [] :: [ nrpc_call() | nrpc_reply() ]
+		pending_tasks = [] :: [ nrpc_call() | nrpc_cast() | nrpc_reply() ]
 	}).
 
 init_it( Config, Local, Remote ) ->
@@ -55,6 +57,9 @@ idle_loop( S = #s{ window_size = WS } ) ->
 		{push_call, GroupLeader, GenReplyTo, Module, Function, Args} ->
 			Deadline = now_ms() + WS,
 			aggregating_loop( Deadline, S #s{ pending_tasks = [ {call, GroupLeader, GenReplyTo, Module, Function, Args } ] } );
+		{push_cast, Module, Function, Args} ->
+			Deadline = now_ms() + WS,
+			aggregating_loop( Deadline, S #s{ pending_tasks = [ {cast, Module, Function, Args } ] } );
 		{push_reply, GenReplyTo, Result} ->
 			Deadline = now_ms() + WS,
 			aggregating_loop( Deadline, S #s{ pending_tasks = [ {reply, GenReplyTo, Result} ] } );
@@ -69,6 +74,9 @@ aggregating_loop( Deadline, S = #s{ pending_tasks = PendingTasks } ) ->
 		{push_call, GroupLeader, GenReplyTo, Module, Function, Args} ->
 			aggregating_loop( Deadline,
 				S #s{ pending_tasks = [ {call, GroupLeader, GenReplyTo, Module, Function, Args} | PendingTasks ] } );
+		{push_cast, Module, Function, Args} ->
+			aggregating_loop( Deadline,
+				S #s{ pending_tasks = [ {cast, Module, Function, Args} | PendingTasks ] } );
 		{push_reply, GenReplyTo, Result} ->
 			aggregating_loop( Deadline,
 				S #s{ pending_tasks = [ {reply, GenReplyTo, Result} | PendingTasks ] } );
@@ -87,6 +95,7 @@ flush_tasks( S = #s{ remote = Remote, local = Local, pending_tasks = PendingTask
 			error_logger:warning_report( [ ?MODULE, flush_tasks, {Error, Reason} ] ),
 			lists:foreach( fun
 					({reply, _, _}) -> ok;
+					({cast, _, _, _}) -> ok;
 					({call, _, GenReplyTo, _, _, _}) -> _Ignored = gen_server:reply( GenReplyTo, {Error, Reason} ), ok
 				end,
 				PendingTasks )

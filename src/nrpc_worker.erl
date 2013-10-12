@@ -16,18 +16,24 @@
 % 
 
 -module (nrpc_worker).
--export([init/1, init_worker/6]).
+-export([init/1, init_worker/6, init_worker/3 ]).
 -export ([
 		start_link_sup/0,
 		start_link/6,
+		start_link/3,
 
-		start_worker/7
+		start_worker/7,
+		start_worker/4
 	]).
 
 start_worker( Sup, Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) ->
 	supervisor:start_child( Sup, [ Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ] ).
+start_worker( Sup, Module, Function, Args ) ->
+	supervisor:start_child( Sup, [ Module, Function, Args ] ).
 
 start_link_sup() -> supervisor:start_link( ?MODULE, {} ).
+start_link( Module, Function, Args ) ->
+	proc_lib:start_link( ?MODULE, init_worker, [ Module, Function, Args ] ).
 start_link( Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) ->
 	proc_lib:start_link( ?MODULE, init_worker, [ Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ] ).
 
@@ -37,6 +43,21 @@ init( {} ) -> {ok, { {simple_one_for_one, 0, 1}, [
 				temporary, brutal_kill, worker, [ ?MODULE ] }
 		] }}.
 
+%% Cast worker
+init_worker( Module, Function, Args ) ->
+	proc_lib:init_ack({ok, self()}),
+	try
+		_Ignored = erlang:apply( Module, Function, Args )
+	catch Error:Reason ->
+		error_logger:warning_report([
+				?MODULE, init_worker, cast_error,
+				{Error, Reason}, {module, Module},
+				{function, Function}, {args, Args}
+			])
+	end,
+	ok.
+
+%% Call worker
 init_worker( Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) ->
 	proc_lib:init_ack( {ok, self()} ),
 	erlang:group_leader( GroupLeader, self() ),

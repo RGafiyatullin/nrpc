@@ -18,18 +18,27 @@
 -module (nrpc).
 -export([ start/0, stop/0 ]).
 -export([ call/4, call/5, call_explicit/5 ]).
+-export([ cast/4, cast/5, cast_explicit/5 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
 -spec stop() -> ok.
 
 -type aggregator() :: {nrpc_aggregator_name(), node()} | nrpc_aggregator_name().
--spec call(
+-spec call_explicit(
 		Client :: aggregator(), Server :: aggregator(),
 		Module :: atom(), Function :: atom(), Args :: [ term() ]
 	) -> term().
+-spec cast_explicit(
+		Client :: aggregator(), Server :: aggregator(),
+		Module :: atom(), Function :: atom(), Args :: [ term() ]
+	) -> ok.
 
+-spec call( RemoteNode :: node(), NRPCName :: nrpc_aggregator_name(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> term().
+-spec call( RemoteNode :: node(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> term().
 
+-spec cast( RemoteNode :: node(), NRPCName :: nrpc_aggregator_name(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
+-spec cast( RemoteNode :: node(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
 
 start() -> application:start(nrpc).
 stop() -> application:stop(nrpc).
@@ -45,6 +54,7 @@ call_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
 			erlang:Error(Reason)
 	end.
 
+
 call( ThisNode, _, Module, Function, Args ) when ThisNode == node() -> erlang:apply( Module, Function, Args );
 call( RemoteNode, NRPCName, Module, Function, Args )
 	when is_atom( RemoteNode )
@@ -57,3 +67,14 @@ call( RemoteNode, NRPCName, Module, Function, Args )
 
 call( Node, Module, Function, Args ) -> call( Node, nrpc_default, Module, Function, Args ).
 
+cast_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
+	gen_server:cast( ClientAggr, {cast, ServerAggr, Module, Function, Args} ).
+cast( RemoteNode, NRPCName, Module, Function, Args )
+	when is_atom( RemoteNode )
+	andalso is_atom( NRPCName )
+	andalso is_atom( Module )
+	andalso is_atom( Function )
+	andalso is_list( Args )
+->
+	cast_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
+cast( RemoteNode, Module, Function, Args ) -> cast( RemoteNode, nrpc_default, Module, Function, Args ).
