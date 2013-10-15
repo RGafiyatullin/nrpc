@@ -45,8 +45,8 @@ tasks( NRPC, ReplyToNRPC, Tasks ) ->
 -spec start_link( Name :: nrpc_aggregator_name(), Config :: nrpc_aggregator_config() ) -> {ok, pid()}.
 -spec start_link_sup( Name :: nrpc_aggregator_name(), Config :: nrpc_aggregator_config() ) -> {ok, pid()}.
 
-start_link( Name, Config ) -> gen_server:start_link({local, Name}, ?MODULE, { server, Name, Config }, []).
-start_link_sup( Name, Config ) -> supervisor:start_link( ?MODULE, { supervisor, Name, Config } ).
+start_link( Name, Config ) -> gen_server:start_link({local, Name}, ?MODULE, { Name, Config }, []).
+start_link_sup( Name, Config ) -> simplest_one_for_one:start_link( {local, list_to_atom(atom_to_list( Name ) ++ "_t_sup")}, {nrpc_transmitter, start_link, [Config, Name]} ).
 
 %%% %%%%%%%%%% %%%
 %%% gen_server %%%
@@ -58,20 +58,9 @@ start_link_sup( Name, Config ) -> supervisor:start_link( ?MODULE, { supervisor, 
 		w_sup :: pid()
 	}).
 
-init({supervisor, Name, Config}) -> supervisor_init( Name, Config );
-init({server, Name, Config}) -> gen_server_init( Name, Config ).
-
-supervisor_init( Name, Config ) ->
-	{ok, { {simple_one_for_one, 0, 1}, [
-			{ undefined,
-				{nrpc_transmitter, start_link, [ Config, Name ]},
-				temporary, 10000, worker, [ nrpc_transmitter ] }
-		] }}.
-
--spec gen_server_init( nrpc_aggregator_name(), nrpc_aggregator_config() ) -> {ok, #s{}}.
-gen_server_init( Name, Config ) -> 
+init( {Name, Config} ) -> 
 	{ok, Sup} = start_link_sup( Name, Config ),
-	{ok, WSup} = nrpc_worker:start_link_sup(),
+	{ok, WSup} = nrpc_worker:start_link_sup( Name ),
 	{ok, #s{
 			name = Name,
 			config = Config,

@@ -16,9 +16,12 @@
 % 
 
 -module (nrpc_worker).
--export([init/1, init_worker/6, init_worker/3 ]).
+-export([
+		init_worker/6,
+		init_worker/3
+	]).
 -export ([
-		start_link_sup/0,
+		start_link_sup/1,
 		start_link/6,
 		start_link/3,
 
@@ -31,17 +34,11 @@ start_worker( Sup, Transmitter, GroupLeader, GenReplyTo, Module, Function, Args 
 start_worker( Sup, Module, Function, Args ) ->
 	supervisor:start_child( Sup, [ Module, Function, Args ] ).
 
-start_link_sup() -> supervisor:start_link( ?MODULE, {} ).
+start_link_sup( Name ) -> simplest_one_for_one:start_link( {local, list_to_atom( atom_to_list( Name ) ++ "_w_sup" )}, {?MODULE, start_link, []} ).
 start_link( Module, Function, Args ) ->
 	proc_lib:start_link( ?MODULE, init_worker, [ Module, Function, Args ] ).
 start_link( Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ) ->
 	proc_lib:start_link( ?MODULE, init_worker, [ Transmitter, GroupLeader, GenReplyTo, Module, Function, Args ] ).
-
-init( {} ) -> {ok, { {simple_one_for_one, 0, 1}, [
-			{ undefined,
-				{?MODULE, start_link, []},
-				temporary, brutal_kill, worker, [ ?MODULE ] }
-		] }}.
 
 %% Cast worker
 init_worker( Module, Function, Args ) ->
