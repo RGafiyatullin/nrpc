@@ -36,6 +36,8 @@ tasks( NRPC, ReplyToNRPC, Tasks ) ->
 	% error_logger:info_report( [?MODULE, tasks, {nrpc, NRPC}, {reply_to_nrpc, ReplyToNRPC}, {tasks, Tasks}] ),
 	try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks} )
 	catch
+		exit:{{nodedown, _}, _} -> { error, nodedown };
+		exit:{noproc, {gen_server, call, [ NRPC | _ ]} } -> { error, no_nrpc };
 		Error:Reason ->
 			error_logger:warning_report([?MODULE, tasks, {Error, Reason}]),
 			{Error, Reason}
