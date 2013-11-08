@@ -89,7 +89,7 @@ aggregating_loop( Deadline, S = #s{ pending_tasks = PendingTasks } ) ->
 
 flush_tasks( S = #s{ remote = Remote, local = Local, pending_tasks = PendingTasks } ) ->
 	% error_logger:info_report([ ?MODULE, flush_tasks, {local, Local}, {remote, Remote}, {tasks_count, length(PendingTasks)} ]),
-	case nrpc_srv:tasks( Remote, Local, PendingTasks ) of
+	case nrpc_srv:tasks( Remote, Local, lists:reverse(PendingTasks) ) of
 		ok -> ok;
 		{Error, Reason} ->
 			error_logger:warning_report( [ ?MODULE, flush_tasks, {Error, Reason} ] ),
