@@ -10,6 +10,7 @@
   			{ nrpc_default, [
   					{window_size, 10}
   				] }
-  		]}
+  		]},
+      {nrpc_monitor_srv_workers, 128}
   	]}
  ]}.

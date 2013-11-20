@@ -30,9 +30,9 @@ init({}) ->
 				aggregator_child_spec( AggrName, AggrConfig )
 				|| {AggrName, AggrConfig} <- Aggregators
 			] ++ [
-				{nrpc_monitor_sup,
-					{nrpc_monitor_sup, start_link, []},
-					permanent, infinity, supervisor, [ nrpc_monitor_sup ]}
+				{nrpc_monitor_srv,
+					{nrpc_monitor_srv, start_link, []},
+					permanent, 100000, worker, [ nrpc_monitor_srv ]}
 			]}
 		}.
 

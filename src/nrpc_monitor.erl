@@ -15,15 +15,11 @@
 % See the NOTICE file distributed with this work for additional information regarding copyright ownership.
 % 
 
--module (nrpc_monitor_sup).
--behaviour (supervisor).
--export ([start_link/0]).
--export ([init/1]).
+-module (nrpc_monitor).
+-export ([install_monitor/2]).
 
-start_link() -> supervisor:start_link( {local, ?MODULE}, ?MODULE, {} ).
+-define(srv, nrpc_monitor_srv).
 
-init( {} ) ->
-	{ok, { 
-			{one_for_one, 5, 30},
-			[]
-		}}.
+install_monitor( Monitoring, Monitored ) when node(Monitored) == node() ->
+	gen_server:call( ?srv, {install_monitor, Monitoring, Monitored}, infinity ).
+

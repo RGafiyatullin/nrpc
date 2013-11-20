@@ -19,6 +19,7 @@
 -export([ start/0, stop/0 ]).
 -export([ call/4, call/5, call_explicit/5 ]).
 -export([ cast/4, cast/5, cast_explicit/5 ]).
+-export([ monitor/1, monitor/2 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -78,3 +79,19 @@ cast( RemoteNode, NRPCName, Module, Function, Args )
 ->
 	cast_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
 cast( RemoteNode, Module, Function, Args ) -> cast( RemoteNode, nrpc_default, Module, Function, Args ).
+
+
+-spec monitor( NRPCName :: nrpc_aggregator_name(), Monitored :: pid() ) -> reference().
+-spec monitor( Monitored :: pid() ) -> reference().
+
+
+monitor( Monitored ) -> ?MODULE:monitor( nrpc_default, Monitored ).
+monitor( NRPCName, Monitored ) when is_pid( Monitored ) ->
+	Monitoring = self(),
+	MonitoredNode = node( Monitored ),
+	case MonitoredNode == node() of
+		true -> erlang:monitor( process, Monitored );
+		false -> call( MonitoredNode, NRPCName, nrpc_monitor, install_monitor, [ Monitoring, Monitored ] )
+	end.
+
+
