@@ -29,6 +29,10 @@ init({}) ->
 			{{one_for_one, 5, 30}, [
 				aggregator_child_spec( AggrName, AggrConfig )
 				|| {AggrName, AggrConfig} <- Aggregators
+			] ++ [
+				{nrpc_monitor_sup,
+					{nrpc_monitor_sup, start_link, []},
+					permanent, infinity, supervisor, [ nrpc_monitor_sup ]}
 			]}
 		}.
 
