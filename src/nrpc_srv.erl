@@ -31,7 +31,12 @@
 ]).
 -include("nrpc.hrl").
 
--spec tasks( NRPC :: nrpc_aggregator_name(), ReplyToNRPC :: nrpc_aggregator_name(), Tasks :: [ nrpc_call() | nrpc_cast() | nrpc_reply() ] ) -> ok.
+-spec tasks(
+		NRPC :: nrpc_aggregator_name(),
+		ReplyToNRPC :: nrpc_aggregator_name(),
+		Tasks :: [ nrpc_call() | nrpc_cast() | nrpc_reply() ]
+	) ->
+		ok | { error, nodedown | no_nrpc } | { exit | error | throw, term() }.
 tasks( NRPC, ReplyToNRPC, Tasks ) ->
 	% error_logger:info_report( [?MODULE, tasks, {nrpc, NRPC}, {reply_to_nrpc, ReplyToNRPC}, {tasks, Tasks}] ),
 	try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks} )

@@ -38,8 +38,8 @@ init({}) ->
 
 -spec aggregator_child_spec( nrpc_aggregator_name(), nrpc_aggregator_config() ) ->
 	{nrpc_aggregator_name(), 
-		{nrpc_srv, start_link, [ term() ]},
-		permanent, 10000, worker, [ nrpc_srv ]}.
+		{nrpc_srv, start_link, [ nrpc_aggregator_name() | nrpc_aggregator_config() ]},
+		permanent, pos_integer(), worker, [ nrpc_srv ]}.
 
 aggregator_child_spec( Name, Config ) when is_atom(Name) and is_list(Config) ->
 	{Name,
