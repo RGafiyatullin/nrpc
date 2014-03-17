@@ -49,7 +49,7 @@ is_remote_alive(RemoteNode) ->
 	case net_kernel:node_info(RemoteNode) of
 		{ok, NodeInfo} ->
 			case proplists:get_value(state, NodeInfo) of
-			    	up -> true;
+				up -> true;
 				_ -> false
 			end;
 		_ -> false
@@ -86,7 +86,7 @@ call( Node, Module, Function, Args ) -> call( Node, nrpc_default, Module, Functi
 cast_explicit( ClientAggr, {_, RemoteNode} = ServerAggr, Module, Function, Args ) ->
 	case is_remote_alive(RemoteNode) of
 		true -> gen_server:cast( ClientAggr, {cast, ServerAggr, Module, Function, Args} );
-		false -> do_nothing
+		false -> ok
 	end.
 cast( RemoteNode, NRPCName, Module, Function, Args )
 	when is_atom( RemoteNode )
