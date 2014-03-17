@@ -37,12 +37,28 @@
 		Tasks :: [ nrpc_call() | nrpc_cast() | nrpc_reply() ]
 	) ->
 		ok | { error, nodedown | no_nrpc } | { exit | error | throw, term() }.
-tasks( NRPC, ReplyToNRPC, Tasks ) ->
+tasks( {_, RemoteNode} = NRPC, ReplyToNRPC, Tasks ) ->
 	% error_logger:info_report( [?MODULE, tasks, {nrpc, NRPC}, {reply_to_nrpc, ReplyToNRPC}, {tasks, Tasks}] ),
+	case nrpc:is_remote_alive(RemoteNode) of
+		true ->
+			try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks}, infinity )
+			catch
+				exit:{{nodedown, _}, _} -> { error, nodedown };
+				exit:{noproc, {gen_server, call, [ NRPC | _ ]} } -> { error, no_nrpc };
+				exit:{timeout,{gen_server, call, [ NRPC | _]}} -> { error, timeout };
+				Error:Reason ->
+					error_logger:warning_report([?MODULE, tasks, {Error, Reason}]),
+					{Error, Reason}
+			end;
+		false ->
+			{ error, nodedown }
+	end;
+tasks( NRPC, ReplyToNRPC, Tasks ) ->
 	try gen_server:call( NRPC, {tasks, ReplyToNRPC, Tasks}, infinity )
 	catch
 		exit:{{nodedown, _}, _} -> { error, nodedown };
 		exit:{noproc, {gen_server, call, [ NRPC | _ ]} } -> { error, no_nrpc };
+		exit:{timeout,{gen_server, call, [ NRPC | _]}} -> { error, timeout };
 		Error:Reason ->
 			error_logger:warning_report([?MODULE, tasks, {Error, Reason}]),
 			{Error, Reason}
