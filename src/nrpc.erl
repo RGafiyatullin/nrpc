@@ -20,6 +20,7 @@
 -export([ call/4, call/5, call_explicit/5 ]).
 -export([ cast/4, cast/5, cast_explicit/5 ]).
 -export([ monitor/1, monitor/2 ]).
+-export([ is_remote_alive/1 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -44,17 +45,31 @@
 start() -> application:start(nrpc).
 stop() -> application:stop(nrpc).
 
-call_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
-	case gen_server:call( ClientAggr, {call, erlang:group_leader(), ServerAggr, Module, Function, Args}, infinity ) of
-		{ok, Result} -> Result;
-		{Error, Reason}
-			when Error == exit
-			orelse Error == error
-			orelse Error == throw
-		->
-			erlang:Error(Reason)
+is_remote_alive(RemoteNode) ->
+	case net_kernel:node_info(RemoteNode) of
+		{ok, NodeInfo} ->
+			case proplists:get_value(state, NodeInfo) of
+			    	up -> true;
+				_ -> false
+			end;
+		_ -> false
 	end.
 
+call_explicit( ClientAggr, {_, RemoteNode} = ServerAggr, Module, Function, Args ) ->
+	case is_remote_alive(RemoteNode) of
+		true ->
+			case gen_server:call( ClientAggr, {call, erlang:group_leader(), ServerAggr, Module, Function, Args}, 5000 ) of
+				{ok, Result} -> Result;
+				{Error, Reason}
+					when Error == exit
+					orelse Error == error
+					orelse Error == throw
+				->
+					erlang:Error(Reason)
+			end;
+		false ->
+			erlang:error(nodedown)
+	end.
 
 call( ThisNode, _, Module, Function, Args ) when ThisNode == node() -> erlang:apply( Module, Function, Args );
 call( RemoteNode, NRPCName, Module, Function, Args )
@@ -68,8 +83,11 @@ call( RemoteNode, NRPCName, Module, Function, Args )
 
 call( Node, Module, Function, Args ) -> call( Node, nrpc_default, Module, Function, Args ).
 
-cast_explicit( ClientAggr, ServerAggr, Module, Function, Args ) ->
-	gen_server:cast( ClientAggr, {cast, ServerAggr, Module, Function, Args} ).
+cast_explicit( ClientAggr, {_, RemoteNode} = ServerAggr, Module, Function, Args ) ->
+	case is_remote_alive(RemoteNode) of
+		true -> gen_server:cast( ClientAggr, {cast, ServerAggr, Module, Function, Args} );
+		false -> do_nothing
+	end.
 cast( RemoteNode, NRPCName, Module, Function, Args )
 	when is_atom( RemoteNode )
 	andalso is_atom( NRPCName )
