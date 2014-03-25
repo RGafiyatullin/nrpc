@@ -45,6 +45,7 @@
 start() -> application:start(nrpc).
 stop() -> application:stop(nrpc).
 
+is_remote_alive(RemoteNode) when RemoteNode == node() -> true;
 is_remote_alive(RemoteNode) ->
 	case net_kernel:node_info(RemoteNode) of
 		{ok, NodeInfo} ->
