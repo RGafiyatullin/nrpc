@@ -80,5 +80,6 @@ process_call_task( #nrpc_call{
 rpc_reply( NRPCName, ReplyToPid, ReplyRef, Result ) ->
 	case nrpc_aggregator_srv:rpc_reply( NRPCName, node(ReplyToPid), ReplyToPid, ReplyRef, Result ) of
 		ok -> ok;
+		{error, rx_down} -> ReplyToPid ! {nrpc_reply, ReplyRef, Result};
 		{error, no_nrpc} -> ReplyToPid ! {nrpc_reply, ReplyRef, Result}
 	end.
