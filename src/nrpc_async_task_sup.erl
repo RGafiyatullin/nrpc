@@ -16,22 +16,39 @@
 % 
 
 -module (nrpc_async_task_sup).
--export ([ start_link/0 ]).
--export ([
-		async_task_start_child/3,
-		async_task_start_link/3,
-		async_task_init/3
-	]).
+-export ([ start_link/0, enter_loop/1 ]).
+-export ([ async_task_start_child/4 ]).
+
+async_task_start_child( Sup, M, F, A ) ->
+	Sup ! { start_child, M, F, A },
+	ok.
 
 start_link() ->
-	simplest_one_for_one:start_link( {local, ?MODULE}, { ?MODULE, async_task_start_link, [] } ).
+	proc_lib:start_link(?MODULE, enter_loop, [ self() ]).
 
-async_task_start_child( M, F, A ) ->
-	supervisor:start_child( ?MODULE, [ M, F, A ] ).
+enter_loop( Parent ) ->
+	_ = proc_lib:init_ack({ok, self()}),
+	erlang:process_flag(trap_exit, true),
+	loop( Parent ).
 
-async_task_start_link( M, F, A ) ->
-	proc_lib:start_link( ?MODULE, async_task_init, [ M, F, A ] ).
+loop( Parent ) ->
+	receive
+		{start_child, M, F, A} ->
+			_ = proc_lib:spawn_link( M, F, A ),
+			loop( Parent );
+		
+		{'EXIT', Parent, Reason} -> exit(Reason);
 
-async_task_init( M, F, A ) ->
-	_ = proc_lib:init_ack( {ok, self()} ),
-	erlang:apply( M, F, A ).
+		{'EXIT', _, normal} -> loop( Parent );
+		{'EXIT', Pid, Abnormal} ->
+			proc_lib:spawn_link(error_logger, warning_report,
+				[{?MODULE, loop, {exited, Pid}, {reason, Abnormal}}]),
+			loop( Parent )
+	end.
+
+% async_task_start_link( M, F, A ) ->
+% 	proc_lib:start_link( ?MODULE, async_task_init, [ M, F, A ] ).
+
+% async_task_init( M, F, A ) ->
+% 	_ = proc_lib:init_ack( {ok, self()} ),
+% 	erlang:apply( M, F, A ).

@@ -34,8 +34,6 @@ init_nrpc_sup() ->
 				[
 					{monitor_srv, {nrpc_monitor_srv, start_link, []},
 						permanent, 10000, supervisor, []},
-					{async_task_sup, {nrpc_async_task_sup, start_link, []},
-						permanent, infinity, supervisor, []},
 					{aggregators_sup, {?MODULE, start_link_aggregators_sup, []},
 						permanent, infinity, supervisor, []}
 				] }

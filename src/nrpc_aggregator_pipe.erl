@@ -31,19 +31,25 @@
 -include("nrpc.hrl").
 
 -record(tx, {}).
--record(rx, {}).
+-record(rx, {
+		sup :: pid()
+	}).
 
 tx_init( { _Name, _Config } ) -> {ok, #tx{}}.
 tx_on_rx_up( _RxPid, S = #tx{} ) -> S.
 tx_on_rx_dn( _RxPid, S = #tx{} ) -> S.
 
-rx_init( { _Name, _Config } ) -> {ok, #rx{}}.
+rx_init( { _Name, _Config } ) ->
+	{ok, Sup} = nrpc_async_task_sup:start_link(),
+	{ok, #rx{
+		sup = Sup
+	}}.
 
-rx_msg_in( #nrpc_cast{ module = M, function = F, args = A }, S = #rx{} ) ->
-	_ = nrpc_async_task_sup:async_task_start_child( M, F, A ),
+rx_msg_in( #nrpc_cast{ module = M, function = F, args = A }, S = #rx{ sup = Sup } ) ->
+	_ = nrpc_async_task_sup:async_task_start_child( Sup, M, F, A ),
 	S;
-rx_msg_in( CallTask = #nrpc_call{ reply_to_pid = ReplyToPid, reply_ref = ReplyRef }, S = #rx{} ) ->
-	try nrpc_async_task_sup:async_task_start_child( ?MODULE, process_call_task, [CallTask] )
+rx_msg_in( CallTask = #nrpc_call{ reply_to_pid = ReplyToPid, reply_ref = ReplyRef }, S = #rx{ sup = Sup } ) ->
+	try nrpc_async_task_sup:async_task_start_child( Sup, ?MODULE, process_call_task, [CallTask] )
 	catch Error:Reason ->
 		error_logger:warning_report([?MODULE, rx_msg_in, nrpc_call, {Error, Reason}]),
 		ReplyToPid ! { nrpc_reply, ReplyRef, {error, no_nrpc} }
