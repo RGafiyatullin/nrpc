@@ -57,6 +57,10 @@ call( RemoteNode, Module, Function, Args, Timeout )
 	andalso ( Timeout == infinity orelse (is_integer( Timeout ) andalso Timeout >= 0) )
 	-> call( RemoteNode, nrpc_default, Module, Function, Args, Timeout ).
 
+call( LocalNode, _NRPCName, Module, Function, Args, _Timeout ) when node() == LocalNode ->
+	try erlang:apply( Module, Function, Args )
+	catch Error:Reason -> {error, {Error, Reason}} end;
+
 call( RemoteNode, NRPCName, Module, Function, Args, Timeout )
 	when is_atom( RemoteNode ) andalso is_atom( NRPCName )
 	andalso is_atom( Module ) andalso is_atom( Function ) andalso is_list( Args )
