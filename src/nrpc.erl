@@ -19,8 +19,8 @@
 -export([ start/0, stop/0 ]).
 -export([ call/4, call/5, call/6 ]).
 -export([ cast/4, cast/5 ]).
-% -export([ monitor/1, monitor/2 ]).
-% -export([ is_remote_alive/1 ]).
+-export([ monitor/1, monitor/2 ]).
+-export([ is_remote_alive/1 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -63,79 +63,23 @@ call( RemoteNode, NRPCName, Module, Function, Args, Timeout )
 	andalso ( Timeout == infinity orelse (is_integer( Timeout ) andalso Timeout >= 0) )
 	-> nrpc_aggregator_srv:rpc_call( NRPCName, RemoteNode, Module, Function, Args, Timeout ).
 
-% -spec call_explicit(
-% 		Client :: aggregator(), Server :: aggregator(),
-% 		Module :: atom(), Function :: atom(), Args :: [ term() ]
-% 	) -> term().
-% -spec cast_explicit(
-% 		Client :: aggregator(), Server :: aggregator(),
-% 		Module :: atom(), Function :: atom(), Args :: [ term() ]
-% 	) -> ok.
-
-% -spec call( RemoteNode :: node(), NRPCName :: nrpc_aggregator_name(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> term().
-% -spec call( RemoteNode :: node(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> term().
-
-% -spec cast( RemoteNode :: node(), NRPCName :: nrpc_aggregator_name(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
-% -spec cast( RemoteNode :: node(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
-
-% is_remote_alive(RemoteNode) when RemoteNode == node() -> true;
-% is_remote_alive(RemoteNode) ->
-% 	case net_kernel:node_info(RemoteNode) of
-% 		{ok, NodeInfo} ->
-% 			case proplists:get_value(state, NodeInfo) of
-% 				up -> true;
-% 				_ -> false
-% 			end;
-% 		_ -> false
-% 	end.
-
-% call_explicit( ClientAggr, {_, RemoteNode} = ServerAggr, Module, Function, Args ) ->
-% 	case is_remote_alive(RemoteNode) of
-% 		true ->
-% 			case gen_server:call( ClientAggr, {call, erlang:group_leader(), ServerAggr, Module, Function, Args}, 5000 ) of
-% 				{ok, Result} -> Result;
-% 				{Error, Reason}
-% 					when Error == exit
-% 					orelse Error == error
-% 					orelse Error == throw
-% 				->
-% 					erlang:Error(Reason)
-% 			end;
-% 		false ->
-% 			erlang:error(nodedown)
-% 	end.
-
-% call( ThisNode, _, Module, Function, Args ) when ThisNode == node() -> erlang:apply( Module, Function, Args );
-% call( RemoteNode, NRPCName, Module, Function, Args )
-% 	when is_atom( RemoteNode )
-% 	andalso is_atom( NRPCName )
-% 	andalso is_atom( Module )
-% 	andalso is_atom( Function )
-% 	andalso is_list( Args )
-% ->
-% 	call_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
-
-% call( Node, Module, Function, Args ) -> call( Node, nrpc_default, Module, Function, Args ).
-
-% cast_explicit( ClientAggr, {_, RemoteNode} = ServerAggr, Module, Function, Args ) ->
-% 	case is_remote_alive(RemoteNode) of
-% 		true -> gen_server:cast( ClientAggr, {cast, ServerAggr, Module, Function, Args} );
-% 		false -> ok
-% 	end.
-% cast( RemoteNode, NRPCName, Module, Function, Args )
-% 	when is_atom( RemoteNode )
-% 	andalso is_atom( NRPCName )
-% 	andalso is_atom( Module )
-% 	andalso is_atom( Function )
-% 	andalso is_list( Args )
-% ->
-% 	cast_explicit( {NRPCName, node()}, {NRPCName, RemoteNode}, Module, Function, Args ).
-% cast( RemoteNode, Module, Function, Args ) -> cast( RemoteNode, nrpc_default, Module, Function, Args ).
+is_remote_alive(RemoteNode) when RemoteNode == node() -> true;
+is_remote_alive(RemoteNode) ->
+	case net_kernel:node_info(RemoteNode) of
+		{ok, NodeInfo} ->
+			case proplists:get_value(state, NodeInfo) of
+				up -> true;
+				_ -> false
+			end;
+		_ -> false
+	end.
 
 
 % -spec monitor( NRPCName :: nrpc_aggregator_name(), Monitored :: pid() ) -> reference().
 % -spec monitor( Monitored :: pid() ) -> reference().
 
+monitor( Monitoree ) when is_pid( Monitoree ) -> nrpc_monitor:install_monitor( Monitoree, nrpc_default ).
+monitor( Monitoree, NRPCName ) when is_pid( Monitoree ) andalso is_atom( NRPCName ) -> nrpc_monitor:install_monitor( Monitoree, NRPCName ).
 
 % monitor( Monitored ) -> ?MODULE:monitor( nrpc_default, Monitored ).
 % monitor( NRPCName, Monitored ) when is_pid( Monitored ) ->

@@ -17,23 +17,37 @@
 
 -module(nrpc_sup).
 -behaviour(supervisor).
--export([start_link/0, init/1]).
+-export ([ start_link/0, start_link_aggregators_sup/0 ]).
+-export ([ init/1 ]).
 -include("nrpc.hrl").
 
 -spec start_link() -> {ok, pid()}.
-start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, {}).
+start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, {sup}).
+start_link_aggregators_sup() -> supervisor:start_link({local, nrpc_aggregator_sup}, ?MODULE, {aggregators_sup}).
 
-init({}) ->
-	{ok, Aggregators} = application:get_env( nrpc, aggregators ),
+init({sup}) -> init_nrpc_sup();
+init({aggregators_sup}) -> init_aggregators_sup().
+
+init_nrpc_sup() ->
 	{ok,
-			{{one_for_one, 5, 30}, [
-				aggregator_child_spec( AggrName, AggrConfig )
-				|| {AggrName, AggrConfig} <- Aggregators
-			] ++ [
-				{async_task_sup, {nrpc_async_task_sup, start_link, []},
-				permanent, infinity, supervisor, []}
-			] }
+			{{one_for_all, 5, 30}, 
+				[
+					{monitor_srv, {nrpc_monitor_srv, start_link, []},
+						permanent, 10000, supervisor, []},
+					{async_task_sup, {nrpc_async_task_sup, start_link, []},
+						permanent, infinity, supervisor, []},
+					{aggregators_sup, {?MODULE, start_link_aggregators_sup, []},
+						permanent, infinity, supervisor, []}
+				] }
 		}.
+
+init_aggregators_sup() ->
+	{ok, Aggregators} = application:get_env( nrpc, aggregators ),
+	ChildrenSpecs = [
+		aggregator_child_spec( AggrName, AggrConfig )
+		|| {AggrName, AggrConfig} <- Aggregators
+	],
+	{ok, { {one_for_one, 5, 30}, ChildrenSpecs }}.
 
 aggregator_child_spec( Name, Config ) when is_atom(Name) and is_list(Config) ->
 	{Name,
