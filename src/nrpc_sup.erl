@@ -30,18 +30,12 @@ init({}) ->
 				aggregator_child_spec( AggrName, AggrConfig )
 				|| {AggrName, AggrConfig} <- Aggregators
 			] ++ [
-				{nrpc_monitor_srv,
-					{nrpc_monitor_srv, start_link, []},
-					permanent, 100000, worker, [ nrpc_monitor_srv ]}
-			]}
+				{async_task_sup, {nrpc_async_task_sup, start_link, []},
+				permanent, infinity, supervisor, []}
+			] }
 		}.
-
--spec aggregator_child_spec( nrpc_aggregator_name(), nrpc_aggregator_config() ) ->
-	{nrpc_aggregator_name(), 
-		{nrpc_srv, start_link, [ nrpc_aggregator_name() | nrpc_aggregator_config() ]},
-		permanent, pos_integer(), worker, [ nrpc_srv ]}.
 
 aggregator_child_spec( Name, Config ) when is_atom(Name) and is_list(Config) ->
 	{Name,
-		{nrpc_srv, start_link, [ Name, Config ]},
-		permanent, 100000, worker, [ nrpc_srv ]}.
+		{nrpc_aggregator_sup, start_link, [ Name, Config ]},
+		permanent, 100000, worker, []}.

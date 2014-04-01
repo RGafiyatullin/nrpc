@@ -1,4 +1,4 @@
-% Copyright 2013 and onwards Roman Gafiyatullin
+% Copyright 2014 and onwards Roman Gafiyatullin
 %
 % Licensed under the Apache License, Version 2.0 (the "License");
 % you may not use this file except in compliance with the License.
@@ -15,11 +15,19 @@
 % See the NOTICE file distributed with this work for additional information regarding copyright ownership.
 % 
 
--module (nrpc_monitor).
--export ([install_monitor/2]).
+-module (nrpc_aggregator_sup).
+-behaviour (supervisor).
+-export ([start_link/2]).
+-export ([init/1]).
+start_link( Name, Config ) ->
+	supervisor:start_link( {local, sup_name(Name)}, ?MODULE, { Name, Config } ).
 
--define(srv, nrpc_monitor_srv).
+init( {Name, Config} ) ->	
+	{ok, { {one_for_all, 3, 10}, [
+		{srv, {nrpc_aggregator_srv, start_link, [ Name, Config ]}, permanent, 10000, worker, [ nrpc_aggregator_srv ]}
+	] }}.
 
-install_monitor( Monitoring, Monitored ) when node(Monitored) == node() ->
-	gen_server:call( ?srv, {install_monitor, Monitoring, Monitored}, infinity ).
 
+%% internal 
+sup_name( Name ) when is_atom(Name) -> list_to_atom(atom_to_list( Name ) ++ "_sup").
+	

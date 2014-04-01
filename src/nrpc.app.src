@@ -1,16 +1,18 @@
 {application, nrpc,
  [
-  {description, ""},
-  {vsn, "0.0.1"},
-  {registered, []},
-  {applications, []},
-  {mod, {nrpc_app, []} },
-  {env, [
-  		{aggregators, [
-  			{ nrpc_default, [
-  					{window_size, 10}
-  				] }
-  		]},
-      {nrpc_monitor_srv_workers, 128}
-  	]}
+	{description, ""},
+	{vsn, "0.0.1"},
+	{registered, []},
+	{applications, [ pipes ]},
+	{mod, {nrpc_app, []} },
+	{env, [
+			{aggregators, [
+				{ nrpc_default, [
+						{window_size, 10}
+					] },
+				{ nrpc_test, [
+						{window_size, 100}
+					] }
+			]}
+		]}
  ]}.
