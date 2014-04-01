@@ -20,7 +20,8 @@
 		} ).
 -record( nrpc_reply, {
 			result :: term(),
-			gen_reply_to :: { pid(), reference() }
+			reply_to_pid :: pid(),
+			reply_ref :: reference()
 		} ).
 
 -type nrpc_cast() :: #nrpc_cast{}.

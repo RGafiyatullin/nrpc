@@ -42,8 +42,15 @@ rx_init( { _Name, _Config } ) -> {ok, #rx{}}.
 rx_msg_in( #nrpc_cast{ module = M, function = F, args = A }, S = #rx{} ) ->
 	_ = nrpc_async_task_sup:async_task_start_child( M, F, A ),
 	S;
-rx_msg_in( CallTask = #nrpc_call{}, S = #rx{} ) ->
-	_ = nrpc_async_task_sup:async_task_start_child( ?MODULE, process_call_task, [CallTask] ),
+rx_msg_in( CallTask = #nrpc_call{ reply_to_pid = ReplyToPid, reply_ref = ReplyRef }, S = #rx{} ) ->
+	try nrpc_async_task_sup:async_task_start_child( ?MODULE, process_call_task, [CallTask] )
+	catch Error:Reason ->
+		error_logger:warning_report([?MODULE, rx_msg_in, nrpc_call, {Error, Reason}]),
+		ReplyToPid ! { nrpc_reply, ReplyRef, {error, no_nrpc} }
+	end,
+	S;
+rx_msg_in( #nrpc_reply{ result = Result, reply_to_pid = ReplyToPid, reply_ref = ReplyRef }, S = #rx{} ) ->
+	ReplyToPid ! { nrpc_reply, ReplyRef, Result },
 	S;
 rx_msg_in( UnexpectedMsg, S = #rx{} ) ->
 	error_logger:warning_report([?MODULE, rx_msg_in, {unexpected_msg, UnexpectedMsg}]),
@@ -51,7 +58,7 @@ rx_msg_in( UnexpectedMsg, S = #rx{} ) ->
 
 
 process_call_task( #nrpc_call{
-	nrpc_name = _NRPCName,
+	nrpc_name = NRPCName,
 	reply_to_pid = ReplyToPid, reply_ref = ReplyRef,
 	module = M, function = F, args = A
 } ) ->
@@ -64,7 +71,14 @@ process_call_task( #nrpc_call{
 	Executor ! start,
 	receive
 		{'DOWN', ExecutorMonRef, process, Executor, {ReplyRef, Result}} ->
-			ReplyToPid ! {nrpc_reply, ReplyRef, Result};
+			rpc_reply( NRPCName, ReplyToPid, ReplyRef, Result );
 		{'DOWN', ExecutorMonRef, process, Executor, Failure} ->
-			ReplyToPid ! {nrpc_reply, ReplyRef, {error, Failure}}
+			rpc_reply( NRPCName, ReplyToPid, ReplyRef, {error, Failure} )
+			% ReplyToPid ! {nrpc_reply, ReplyRef, {error, Failure}}
+	end.
+
+rpc_reply( NRPCName, ReplyToPid, ReplyRef, Result ) ->
+	case nrpc_aggregator_srv:rpc_reply( NRPCName, node(ReplyToPid), ReplyToPid, ReplyRef, Result ) of
+		ok -> ok;
+		{error, no_nrpc} -> ReplyToPid ! {nrpc_reply, ReplyRef, Result}
 	end.

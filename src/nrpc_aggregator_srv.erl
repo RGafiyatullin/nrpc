@@ -21,7 +21,8 @@
 -export ([
 		get_pipe_to_node/2,
 		rpc_cast/5,
-		rpc_call/6
+		rpc_call/6,
+		rpc_reply/5
 	]).
 -export ([
 		init/1,
@@ -38,7 +39,23 @@ start_link( Name, Config ) -> gen_server:start_link({local, Name}, ?MODULE, { Na
 get_pipe_to_node( Name, Node )
 	when is_atom(Name) andalso is_atom( Node )
 ->
-	gen_server:call( Name, {get_pipe_to_node, Node} ).
+	try gen_server:call( Name, {get_pipe_to_node, Node} )
+	catch
+		exit:{noproc, {gen_server, call, [Name | _]}} -> {error, no_nrpc}
+	end.
+
+rpc_reply( NRPCName, RemoteNode, ReplyToPid, ReplyRef, Result )
+	when is_atom( NRPCName ) andalso is_atom( RemoteNode )
+	andalso is_pid( ReplyToPid ) andalso is_reference( ReplyRef )
+->
+	case get_pipe_to_node( NRPCName, RemoteNode ) of
+		{ok, PipeTxName} ->
+			case pipes:pass( PipeTxName, #nrpc_reply{ result = Result, reply_to_pid = ReplyToPid, reply_ref = ReplyRef } ) of
+				ok -> ok;
+				{error, rx_down} -> {error, rx_down}
+			end;
+		{error, Error} -> {error, Error}
+	end.
 
 rpc_cast( NRPCName, RemoteNode, Module, Function, Args )
 	when is_atom( NRPCName ) andalso is_atom( RemoteNode )
