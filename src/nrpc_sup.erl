@@ -18,12 +18,19 @@
 -module(nrpc_sup).
 -behaviour(supervisor).
 -export ([ start_link/0, start_link_aggregators_sup/0 ]).
+-export ([ add_aggregator/2, remove_aggregator/1 ]).
 -export ([ init/1 ]).
 -include("nrpc.hrl").
 
 -spec start_link() -> {ok, pid()}.
 start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, {sup}).
 start_link_aggregators_sup() -> supervisor:start_link({local, nrpc_aggregator_sup}, ?MODULE, {aggregators_sup}).
+
+add_aggregator( AggrName, AggrConfig ) ->
+	supervisor:start_child( nrpc_aggregator_sup, aggregator_child_spec( AggrName, AggrConfig ) ).
+remove_aggregator( AggrName ) ->
+	ok = supervisor:terminate_child( nrpc_aggregator_sup, AggrName ),
+	ok = supervisor:delete_child( nrpc_aggregator_sup, AggrName ).
 
 init({sup}) -> init_nrpc_sup();
 init({aggregators_sup}) -> init_aggregators_sup().
@@ -51,3 +58,5 @@ aggregator_child_spec( Name, Config ) when is_atom(Name) and is_list(Config) ->
 	{Name,
 		{nrpc_aggregator_sup, start_link, [ Name, Config ]},
 		permanent, 100000, worker, []}.
+
+

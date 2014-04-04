@@ -21,6 +21,7 @@
 -export([ cast/4, cast/5 ]).
 -export([ monitor/1, monitor/2 ]).
 -export([ is_remote_alive/1 ]).
+-export([ add/1, remove/1 ]).
 -include("nrpc.hrl").
 
 -spec start() -> ok.
@@ -28,6 +29,9 @@
 
 start() -> application:start(nrpc).
 stop() -> application:stop(nrpc).
+
+add( Name ) when is_atom( Name ) -> nrpc_sup:add_aggregator( Name, [] ).
+remove( Name ) when is_atom( Name ) -> nrpc_sup:remove_aggregator( Name ).
 
 -spec cast( RemoteNode :: node(), NRPCName :: atom(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
 -spec cast( RemoteNode :: node(), Module :: atom(), Function :: atom(), Args :: [ term() ] ) -> ok.
